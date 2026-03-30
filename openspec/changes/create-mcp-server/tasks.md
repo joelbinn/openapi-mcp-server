@@ -45,3 +45,7 @@
 - [x] 6.3 Create an instance of `McpAdapter` and use it to transform the internal tools into the MCP-compliant format.
 - [x] 6.4 Create a `/tools` GET endpoint that returns the MCP-compliant JSON toolset.
 - [x] 6.5 Add a `README.md` to the project explaining how to install dependencies and run the server.
+
+## 7. Build Project
+
+- [x] 7.1 Compile the TypeScript code with `npx tsc`.

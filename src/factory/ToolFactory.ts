@@ -1,7 +1,7 @@
 // src/factory/ToolFactory.ts
 
-import SwaggerParser, { OpenAPI } from "swagger-parser";
-import axios, { AxiosInstance } from "axios";
+import SwaggerParser from "swagger-parser";
+import axios, { AxiosInstance, AxiosError } from "axios";
 
 export interface InternalTool {
     id: string;
@@ -12,20 +12,22 @@ export interface InternalTool {
 
 export class ToolFactory {
 
-    private _configureHttpClient(serverUrl: string, api: OpenAPI.Document): AxiosInstance {
+    private _configureHttpClient(serverUrl: string, api: any): AxiosInstance { // Changed api type to any
         const client = axios.create({
             baseURL: serverUrl,
         });
 
         const securitySchemes = api.components?.securitySchemes;
-        if (!api.security || !securitySchemes) {
+        // Check if api.security is an array or if securitySchemes exists
+        if (!api.security || api.security.length === 0 || !securitySchemes) {
             return client;
         }
 
         for (const requirement of api.security) {
             for (const schemeName in requirement) {
                 const scheme = securitySchemes[schemeName];
-                if (scheme && 'type' in scheme && scheme.type === 'apiKey' && scheme.in === 'header') {
+                // Ensure scheme is of type SecuritySchemeObject and has expected properties
+                if (scheme && typeof scheme === 'object' && 'type' in scheme && scheme.type === 'apiKey' && 'in' in scheme && scheme.in === 'header' && 'name' in scheme) {
                     const envVarName = `${schemeName.replace(/Auth$/, '').toUpperCase()}_KEY`;
                     const apiKey = process.env[envVarName];
 
@@ -84,8 +86,12 @@ export class ToolFactory {
                     data: body,
                 });
                 return response.data;
-            } catch (error) {
-                console.error(`Error executing tool '${operation.operationId}':`, error.response?.data || error.message);
+            } catch (error: unknown) {
+                if (axios.isAxiosError(error)) {
+                    console.error(`Error executing tool '${operation.operationId}':`, error.response?.data || error.message);
+                } else {
+                    console.error(`Error executing tool '${operation.operationId}':`, error);
+                }
                 throw error;
             }
         };
@@ -93,9 +99,9 @@ export class ToolFactory {
 
     public async createFromFile(filePath: string): Promise<{ [key: string]: InternalTool }> {
         try {
-            const api = await SwaggerParser.validate(filePath);
+            const api: any = await (SwaggerParser as any).validate(filePath); // Cast SwaggerParser to any
             
-            let serverUrl = process.env.API_SERVER_URL;
+            let serverUrl: string | undefined = process.env.API_SERVER_URL;
             if (!serverUrl) {
                 if (api.servers && api.servers.length > 0) {
                     serverUrl = api.servers[0].url;
@@ -104,7 +110,7 @@ export class ToolFactory {
                 }
             }
 
-            const httpClient = this._configureHttpClient(serverUrl, api);
+            const httpClient = this._configureHttpClient(serverUrl!, api);
             const tools: { [key: string]: InternalTool } = {};
 
             for (const path in api.paths) {
@@ -123,7 +129,7 @@ export class ToolFactory {
             }
 
             return tools;
-        } catch (err) {
+        } catch (err: unknown) {
             console.error(`Error validating OpenAPI spec at ${filePath}:`, err);
             throw err;
         }
